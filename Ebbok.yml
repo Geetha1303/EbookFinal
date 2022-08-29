@@ -1,0 +1,62 @@
+--- 
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  name: cloudl-client-deployment
+spec: 
+  replicas: 1
+  selector: 
+    matchLabels: 
+      app: cloudl-client
+  template: 
+    metadata: 
+      labels: 
+        app: cloudl-client
+    spec: ~
+    volumes: 
+      - 
+        configMap: 
+          name: opa-istio-config
+        containers: 
+          - 
+            args: 
+              - run
+              - "--server"
+              - "--ignore=.*"
+              - "--config-file=/config/conf.yaml"
+              - "--authorization=basic"
+              - "--addr=http://127.0.0.1:8181"
+              - "--diagnostic-addr=0.0.0.0:8282"
+            image: "openpolicyagent/opa:0.42.2-envoy-rootless"
+            livenessProbe: 
+              httpGet: 
+                path: /health
+                port: 8282
+                scheme: HTTP
+              initialDelaySeconds: 5
+              periodSeconds: 5
+            name: opa
+            readinessProbe: 
+              httpGet: 
+                path: /health?bundle=true
+                port: 8282
+                scheme: HTTP
+              initialDelaySeconds: 5
+              periodSeconds: 5
+            volumeMounts: 
+              - 
+                mountPath: /config
+                name: opa-config-vol
+                readOnly: true
+          - 
+            env: 
+              - 
+                name: CLOUDL_SERVER
+                value: cloudl-server-service
+            image: "kavinduchamiran/cloudl-client:latest"
+            name: cloudl-client
+            ports: 
+              - 
+                containerPort: 80
+                name: http-port
+        name: opa-config-vol
