@@ -31,7 +31,7 @@ spec:
             runAsUser: 0
       containers:
         - name: app
-          image: "swathipottabathini/react-ts:latest"
+          image: 'swathipottabathini/react-ts:latest'
           ports:
             - containerPort: 3000
           env:
@@ -54,7 +54,7 @@ spec:
           - name: ENVOY_UID
             value: "1111"
         - name: opa
-          image: "openpolicyagent/opa:0.41.0-envoy-rootless"
+          image: 'openpolicyagent/opa:0.41.0-envoy-rootless'
           securityContext:
             runAsUser: 1111
           volumeMounts:
