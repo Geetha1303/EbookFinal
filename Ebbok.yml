@@ -60,3 +60,19 @@ spec:
                 containerPort: 80
                 name: http-port
         name: opa-config-vol
+
+ --- 
+apiVersion: v1
+kind: Service
+metadata: 
+  name: cloudl-client-service
+spec: 
+  ports: 
+    - 
+      port: 80
+      protocol: TCP
+      targetPort: http-port
+  selector: 
+    app: cloudl-client
+  type: LoadBalancer
+
