@@ -1,104 +1,163 @@
-# You can use this deployment to create opa and envoy containers as side cars
-# Make sure you mount the the config maps created above as volumes
-kind: Deployment
 apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: example-app-envoy
-  labels:
-    app: example-app-envoy
-    system-type: envoy
+  name: cloudl-client-deployment
 spec:
   replicas: 1
-  selector:
-    matchLabels:
-      app: example-app-envoy
-      system-type: envoy
   template:
     metadata:
       labels:
-        app: example-app-envoy
-        system-type: envoy
+        app: cloudl-client
     spec:
-      initContainers:
-        - name: proxy-init
-          image: "openpolicyagent/proxy_init:v5"
-          args: ["-p", "8000", "-o", "8001", "-u", "1111"]
-          securityContext:
-            capabilities:
-              add:
-              - NET_ADMIN
-            runAsNonRoot: false
-            runAsUser: 0
-      containers:
-        - name: app
-          image: 'swathipottabathini/react-ts:latest'
-          ports:
-            - containerPort: 3000
-          env:
-          - name: POLICY_PATH
-            value: /v1/data/application/main
-        - name: envoy
-          image: "envoyproxy/envoy:v1.21.2"
-          volumeMounts:
-          - readOnly: true
-            mountPath: /config
-            name: envoy-config-vol
-          - readOnly: false
-            mountPath: /run/opa/sockets
-            name: opa-socket
-          args:
-          - "envoy"
-          - "--config-path"
-          - "/config/envoy.yaml"
-          env:
-          - name: ENVOY_UID
-            value: "1111"
-        - name: opa
-          image: 'openpolicyagent/opa:0.41.0-envoy-rootless'
-          securityContext:
-            runAsUser: 1111
-          volumeMounts:
-          - readOnly: true
-            mountPath: /config
-            name: opa-config-vol
-          - readOnly: false
-            mountPath: /run/opa/sockets
-            name: opa-socket
-          args:
-          - "run"
-          - "--server"
-          - "--addr=http://127.0.0.1:8181"
-          - "--config-file=/config/conf.yaml"
-          - "--authorization=basic"
-      env:
-      volumes:
+    volumes:
       - name: opa-config-vol
         configMap:
-          name: opa-envoy-config
-      - name: envoy-config-vol
+          name: opa-istio-config
+    containers:
+      - name: opa
+        image: "openpolicyagent/opa:0.42.2-envoy-rootless"
+        volumeMounts:
+        - readOnly: true
+          mountPath: /config
+          name: opa-config-vol
+        livenessProbe:
+            httpGet:
+              path: /health
+              scheme: HTTP
+              port: 8282
+            initialDelaySeconds: 5    # Tune these periods for your environemnt
+            periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health?bundle=true # Include bundle activation in readiness
+            scheme: HTTP
+            port: 8282
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        args:
+          - "run"
+          - "--server"
+          - "--ignore=.*"
+          - "--config-file=/config/conf.yaml"
+          - "--authorization=basic"
+          - "--addr=http://127.0.0.1:8181"
+          - "--diagnostic-addr=0.0.0.0:8282"
+      - name: cloudl-client
+        image: "swathipottabathini/react-ts:latest"
+        ports:
+        - containerPort: 80
+          name: http-port
+        env:
+           - name: CLOUDL_SERVER
+             value: cloudl-server-service
+  selector:
+    matchLabels:
+      app: cloudl-client
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudl-server-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: cloudl-server
+    spec:
+    volumes:
+      - name: opa-config-vol
         configMap:
-          name: envoy-config
-      - name: opa-socket
-        emptyDir: {}
+          name: opa-istio-config
+    containers:
+      - name: opa
+        image: "openpolicyagent/opa:0.42.2-envoy-rootless"
+        volumeMounts:
+        - readOnly: true
+          mountPath: /config
+          name: opa-config-vol
+        livenessProbe:
+            httpGet:
+              path: /health
+              scheme: HTTP
+              port: 8282
+            initialDelaySeconds: 5    # Tune these periods for your environemnt
+            periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health?bundle=true # Include bundle activation in readiness
+            scheme: HTTP
+            port: 8282
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        args:
+          - "run"
+          - "--server"
+          - "--ignore=.*"
+          - "--config-file=/config/conf.yaml"
+          - "--authorization=basic"
+          - "--addr=http://127.0.0.1:8181"
+          - "--diagnostic-addr=0.0.0.0:8282"
+  containers:
+        - name: cloudl-server
+          image: "swathipottabathini/react-ts:latest"
+          ports:
+            - containerPort: 5000
+              name: nodejs-port
+  selector:
+    matchLabels:
+      app: cloudl-server
+---
 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mongodb
+  labels:
+    app: mongodb
+spec:
+  containers:
+    - name: mongodb
+      image: mongo:4.0.4
+      ports:
+        - containerPort: 27017
+          name: mongodb-port
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudl-client-service
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: http-port
+  selector:
+    app: cloudl-client
+  type: LoadBalancer
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: example-app-envoy-svc
-  labels:
-    app: example-app-envoy
-    system-type: envoy
+  name: cloudl-server-service
 spec:
   ports:
-  - name: http
-    port: 80
-    protocol: TCP
-    targetPort: 3000
-  - name: opa
-    port: 8181
-    protocol: TCP
-    targetPort: 8181
+    - port: 5000
+      protocol: TCP
   selector:
-    app: example-app-envoy
-    system-type: envoy
+    app: cloudl-server
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service
+spec:
+  ports:
+    - port: 27017
+      protocol: TCP
+  selector:
+    app: mongodb
+  type: NodePort
