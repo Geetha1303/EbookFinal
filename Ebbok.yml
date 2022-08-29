@@ -43,7 +43,7 @@ spec:
           - "--addr=http://127.0.0.1:8181"
           - "--diagnostic-addr=0.0.0.0:8282"
       - name: cloudl-client
-        image: "swathipottabathini/react-ts:latest"
+          image: "swathipottabathini/react-ts:latest"
         ports:
         - containerPort: 80
           name: http-port
