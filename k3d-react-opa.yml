@@ -267,7 +267,7 @@ spec:
     - uri:
         prefix: /api/v1/employees
       route:
-      - destination:
-          host: backend-service
-          port:
-            number: 8080
+    - destination:
+        host: backend-service
+        port:
+          number: 8080
